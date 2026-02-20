@@ -4,6 +4,11 @@ body {
   background-color: #f4f4f4;
   color: #333;
 }
+body.dark {
+  background-color: #1e1e1e;
+  color: #eee;
+}
+
 header {
   display: flex;
   justify-content: space-between;
@@ -19,6 +24,7 @@ header button {
   padding: 5px 10px;
   cursor: pointer;
 }
+
 nav {
   display: flex;
   background-color: #eee;
@@ -34,6 +40,7 @@ nav button.active {
   background-color: #0d6efd;
   color: white;
 }
+
 .tab-content {
   display: none;
   padding: 20px;
@@ -41,12 +48,22 @@ nav button.active {
 .tab-content.active {
   display: block;
 }
-ul {
-  list-style-type: none;
-  padding: 0;
+
+ul { list-style-type: none; padding: 0; }
+button { cursor: pointer; }
+
+/* Calendar grid */
+#calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 5px;
 }
-button {
+.calendar-day {
+  padding: 10px;
+  background: #ddd;
+  text-align: center;
   cursor: pointer;
+  border-radius: 4px;
 }
 
 /* Modal */
@@ -61,6 +78,7 @@ button {
   justify-content: center;
   align-items: center;
 }
+.modal.hidden { display: none; }
 .modal-content {
   background: white;
   padding: 20px;

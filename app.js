@@ -21,6 +21,8 @@ tabs.forEach(tab => {
 });
 tabs[0].click(); // default tab
 
+// ==== Modal control ====
+modal.classList.add("hidden");
 modalClose.addEventListener("click", () => modal.classList.add("hidden"));
 
 // ==== Customers ====
@@ -36,7 +38,7 @@ document.getElementById("add-customer-btn").addEventListener("click", async () =
 async function loadCustomers(){
   const { data, error } = await supabase.from("customers").select("*");
   if(error) return alert(error.message);
-  customerList.innerHTML = data.map(c => `<li>${c.name}</li>`).join("");
+  customerList.innerHTML = data.map(c => `<li>${c.id}: ${c.name}</li>`).join("");
 }
 loadCustomers();
 
@@ -54,7 +56,7 @@ document.getElementById("add-job-btn").addEventListener("click", async () => {
 async function loadJobs(){
   const { data, error } = await supabase.from("jobs").select("*");
   if(error) return alert(error.message);
-  jobList.innerHTML = data.map(j => `<li>${j.title} (Customer: ${j.customer_id}) - ${j.status}</li>`).join("");
+  jobList.innerHTML = data.map(j => `<li>${j.id}: ${j.title} (Customer: ${j.customer_id}) - ${j.status}</li>`).join("");
 }
 loadJobs();
 
