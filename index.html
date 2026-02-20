@@ -1,60 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FlowPro Elite MVP</title>
-
-<!-- Tailwind -->
-<script src="https://cdn.tailwindcss.com"></script>
-
-<!-- FullCalendar -->
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/main.min.js"></script>
-
-<!-- Flatpickr for date picker -->
-<link href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-
-<link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlowPro Elite v3.1</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="bg-gray-100 text-gray-900 font-sans min-h-screen">
+<body>
+  <header>
+    <h1>FlowPro Elite</h1>
+    <button id="theme-toggle">Dark/Light</button>
+  </header>
 
-<header class="bg-blue-600 text-white p-4 text-xl font-bold flex justify-between items-center">
-FlowPro Elite MVP
-<button onclick="toggleTheme()" class="bg-white text-blue-600 px-2 py-1 rounded text-sm">Dark/Light</button>
-</header>
+  <nav>
+    <button class="tab-btn" data-tab="customers">Customers</button>
+    <button class="tab-btn" data-tab="jobs">Jobs</button>
+    <button class="tab-btn" data-tab="calendar">Calendar</button>
+    <button class="tab-btn" data-tab="todo">To-Do</button>
+    <button class="tab-btn" data-tab="invoices">Invoices</button>
+  </nav>
 
-<main class="p-4">
+  <main>
+    <section id="customers" class="tab-content">
+      <h2>Customers</h2>
+      <button id="add-customer-btn">Add Customer</button>
+      <ul id="customer-list"></ul>
+    </section>
 
-<!-- Customers -->
-<section class="mb-6">
-<h2 class="text-lg font-semibold mb-2">Add Customer</h2>
-<input id="customerName" type="text" placeholder="Customer Name" class="border p-2 w-full mb-2 rounded">
-<input id="customerEmail" type="text" placeholder="Email" class="border p-2 w-full mb-2 rounded">
-<input id="customerPhone" type="text" placeholder="Phone" class="border p-2 w-full mb-2 rounded">
-<button onclick="addCustomer()" class="bg-blue-600 text-white px-4 py-2 rounded w-full">Add Customer</button>
-</section>
+    <section id="jobs" class="tab-content">
+      <h2>Jobs</h2>
+      <button id="add-job-btn">Add Job</button>
+      <ul id="job-list"></ul>
+    </section>
 
-<!-- Jobs -->
-<section class="mb-6">
-<h2 class="text-lg font-semibold mb-2">Add Job</h2>
-<select id="jobCustomer" class="border p-2 w-full mb-2 rounded">
-  <option value="">Select Customer</option>
-</select>
-<input id="jobTitle" type="text" placeholder="Job Title" class="border p-2 w-full mb-2 rounded">
-<input id="jobDate" type="text" placeholder="Select Date" class="border p-2 w-full mb-2 rounded">
-<button onclick="addJob()" class="bg-green-600 text-white px-4 py-2 rounded w-full">Add Job</button>
-</section>
+    <section id="calendar" class="tab-content">
+      <h2>Calendar</h2>
+      <div id="calendar-grid"></div>
+    </section>
 
-<!-- Calendar -->
-<section class="mb-6">
-<h2 class="text-lg font-semibold mb-2">Calendar</h2>
-<div id="calendar"></div>
-</section>
+    <section id="todo" class="tab-content">
+      <h2>To-Do List</h2>
+      <ul id="todo-list"></ul>
+    </section>
 
-</main>
+    <section id="invoices" class="tab-content">
+      <h2>Invoices</h2>
+      <ul id="invoice-list"></ul>
+      <button id="generate-invoice-btn">Generate Invoice</button>
+    </section>
+  </main>
 
-<script src="app.js"></script>
+  <!-- Modals -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-content">
+      <span id="modal-close" class="close">&times;</span>
+      <div id="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
