@@ -1,64 +1,13 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlowPro Elite v3.1</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body class="light">
-  <header>
-    <h1>FlowPro Elite</h1>
-    <button id="theme-toggle">Dark/Light</button>
-  </header>
-
-  <nav>
-    <button class="tab-btn" data-tab="customers">Customers</button>
-    <button class="tab-btn" data-tab="jobs">Jobs</button>
-    <button class="tab-btn" data-tab="calendar">Calendar</button>
-    <button class="tab-btn" data-tab="todo">To-Do</button>
-    <button class="tab-btn" data-tab="invoices">Invoices</button>
-  </nav>
-
-  <main>
-    <section id="customers" class="tab-content">
-      <h2>Customers</h2>
-      <button id="add-customer-btn">Add Customer</button>
-      <ul id="customer-list"></ul>
-    </section>
-
-    <section id="jobs" class="tab-content">
-      <h2>Jobs</h2>
-      <button id="add-job-btn">Add Job</button>
-      <ul id="job-list"></ul>
-    </section>
-
-    <section id="calendar" class="tab-content">
-      <h2>Calendar</h2>
-      <div id="calendar-grid"></div>
-    </section>
-
-    <section id="todo" class="tab-content">
-      <h2>To-Do List</h2>
-      <ul id="todo-list"></ul>
-    </section>
-
-    <section id="invoices" class="tab-content">
-      <h2>Invoices</h2>
-      <ul id="invoice-list"></ul>
-      <button id="generate-invoice-btn">Generate Invoice</button>
-    </section>
-  </main>
-
-  <!-- Modal -->
-  <div id="modal" class="modal hidden">
-    <div class="modal-content">
-      <span id="modal-close" class="close">&times;</span>
-      <div id="modal-body"></div>
-    </div>
-  </div>
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-  <script src="app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>flowproelite</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
