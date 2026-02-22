@@ -3,7 +3,7 @@ import { supabase } from "./supabaseclient";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { 
   Users, LayoutDashboard, Calendar as CalIcon, Clock, 
-  CheckCircle2, Circle, Wrench, Phone, MapPin, Edit2, Save, X, ListTodo
+  CheckCircle2, Circle, Wrench, Phone, MapPin, Edit2, Save, X, ListTodo, Trash2
 } from "lucide-react";
 
 export default function App() {
@@ -23,9 +23,12 @@ export default function App() {
   const [todoInput, setTodoInput] = useState("");
   const [newEvent, setNewEvent] = useState({ title: "", event_date: new Date().toISOString().split('T')[0], customer_id: "" });
   
-  // Edit Customer State
+  // Edit States
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", phone: "", address: "" });
+  
+  const [editingJob, setEditingJob] = useState(null);
+  const [editJobForm, setEditJobForm] = useState({ title: "", revenue: "", status: "" });
 
   const navItems = [
     { id: "dashboard", icon: <LayoutDashboard size={24}/>, label: "Home" },
@@ -41,7 +44,6 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  // OPTIMIZED: Fetch all data concurrently
   async function fetchData() {
     setLoading(true);
     try {
@@ -91,8 +93,30 @@ export default function App() {
       const nextNum = nextJobNumber + 1;
       await supabase.from("Settings").update({ next_job_number: nextNum }).eq("id", 1);
       setNextJobNumber(nextNum);
-      setNewJob({ ...newJob, title: "", revenue: "" });
+      setNewJob({ ...newJob, title: "", revenue: "", customer_id: "" });
     }
+  };
+
+  const handleUpdateJob = async (id) => {
+    const { data, error } = await supabase.from("Jobs")
+      .update({ 
+        title: editJobForm.title, 
+        revenue: parseFloat(editJobForm.revenue || 0),
+        status: editJobForm.status
+      })
+      .eq("id", id)
+      .select("*, Customers(name)");
+    
+    if (!error) {
+      setJobs(jobs.map(j => j.id === id ? data[0] : j));
+      setEditingJob(null);
+    }
+  };
+
+  const handleDeleteJob = async (id) => {
+    if (!window.confirm("Delete this job permanently?")) return;
+    const { error } = await supabase.from("Jobs").delete().eq("id", id);
+    if (!error) setJobs(jobs.filter(j => j.id !== id));
   };
 
   const handleAddTask = async (e) => {
@@ -113,17 +137,16 @@ export default function App() {
     const { data, error } = await supabase.from("CalendarEvents").insert([payload]).select("*, Customers(name)");
     if (!error) {
       setCalendarEvents([...calendarEvents, data[0]].sort((a, b) => new Date(a.event_date) - new Date(b.event_date)));
-      setNewEvent({ ...newEvent, title: "" });
+      setNewEvent({ ...newEvent, title: "", customer_id: "" });
     }
   };
 
-  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-950 text-blue-500 font-bold animate-pulse">Loading FlowPro...</div>;
+  if (loading) return <div className="flex h-screen items-center justify-center bg-slate-950 text-blue-500 font-bold animate-pulse text-2xl tracking-tighter italic">FLOWPRO...</div>;
 
   return (
-    // OPTIMIZED FOR S25 ULTRA: Flex-col on mobile (leaves room for bottom nav), flex-row on desktop
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-slate-950 text-slate-100 font-sans pb-20 md:pb-0">
       
-      {/* DESKTOP SIDEBAR (Hidden on mobile) */}
+      {/* DESKTOP SIDEBAR */}
       <aside className="hidden md:flex w-72 bg-slate-900 border-r border-slate-800 flex-col transition-all duration-300">
         <div className="p-8 text-blue-500">
           <h1 className="font-black text-3xl italic tracking-tighter">FLOWPRO</h1>
@@ -137,7 +160,7 @@ export default function App() {
         </nav>
       </aside>
 
-      {/* MOBILE BOTTOM NAVIGATION (Hidden on desktop) - Perfect for thumb reach */}
+      {/* MOBILE BOTTOM NAV */}
       <nav className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 flex justify-around items-center p-3 pb-safe z-50">
          {navItems.map(item => (
             <button key={item.id} onClick={() => setTab(item.id)} className={`flex flex-col items-center p-2 rounded-lg ${tab === item.id ? "text-blue-500" : "text-slate-500"}`}>
@@ -149,8 +172,6 @@ export default function App() {
 
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 overflow-y-auto p-6 md:p-12">
-        
-        {/* HEADER */}
         <header className="flex flex-col md:flex-row justify-between md:items-end mb-8 md:mb-12 gap-6">
           <div className="mt-4 md:mt-0">
             <h2 className="text-3xl md:text-4xl font-black uppercase tracking-tight text-white">{tab.replace("-", " ")}</h2>
@@ -164,8 +185,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* --- DYNAMIC TABS --- */}
-        
         {tab === "dashboard" && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="bg-slate-900 border border-slate-800 p-8 rounded-3xl h-[350px] md:h-[450px] flex flex-col">
@@ -189,34 +208,32 @@ export default function App() {
             <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl">
               <h3 className="text-blue-500 font-bold mb-6 uppercase text-xs tracking-widest">Register New Client</h3>
               <form onSubmit={handleAddCustomer} className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                {/* Touch targets increased to p-4 for easy tapping */}
-                <input required name="name" className="bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-base" placeholder="Client Name" />
-                <input required name="phone" type="tel" className="bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all text-base" placeholder="Phone Number" />
-                <input required name="address" className="bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all md:col-span-2 text-base" placeholder="Full Service Address" />
+                <input required name="name" className="bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-blue-500 transition-all text-base" placeholder="Client Name" />
+                <input required name="phone" type="tel" className="bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-blue-500 transition-all text-base" placeholder="Phone Number" />
+                <input required name="address" className="bg-slate-950 p-4 rounded-2xl border border-slate-800 outline-none focus:border-blue-500 md:col-span-2 text-base" placeholder="Full Service Address" />
                 <button className="bg-blue-600 hover:bg-blue-500 text-white p-4 rounded-2xl font-bold transition-colors md:col-span-4 mt-2 text-lg">Save Client</button>
               </form>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
               {customers.map(c => (
-                <div key={c.id} className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl relative group">
+                <div key={c.id} className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl relative">
                   {editingCustomer === c.id ? (
                     <div className="space-y-4">
-                      <input className="w-full bg-slate-950 p-3 border border-blue-500/50 rounded-xl text-base" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} placeholder="Name"/>
-                      <input type="tel" className="w-full bg-slate-950 p-3 border border-blue-500/50 rounded-xl text-base" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})} placeholder="Phone"/>
-                      <input className="w-full bg-slate-950 p-3 border border-blue-500/50 rounded-xl text-base" value={editForm.address} onChange={e => setEditForm({...editForm, address: e.target.value})} placeholder="Address"/>
-                      <div className="flex gap-3 pt-2">
-                        <button onClick={() => handleUpdateCustomer(c.id)} className="flex-1 bg-emerald-600/20 text-emerald-500 p-3 rounded-xl flex items-center justify-center gap-2 font-semibold hover:bg-emerald-600/30"><Save size={18}/> Save</button>
-                        <button onClick={() => setEditingCustomer(null)} className="flex-1 bg-slate-800 text-slate-400 p-3 rounded-xl flex items-center justify-center gap-2 font-semibold hover:bg-slate-700"><X size={18}/> Cancel</button>
+                      <input className="w-full bg-slate-950 p-3 border border-blue-500/50 rounded-xl text-base" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})}/>
+                      <input className="w-full bg-slate-950 p-3 border border-blue-500/50 rounded-xl text-base" value={editForm.phone} onChange={e => setEditForm({...editForm, phone: e.target.value})}/>
+                      <input className="w-full bg-slate-950 p-3 border border-blue-500/50 rounded-xl text-base" value={editForm.address} onChange={e => setEditForm({...editForm, address: e.target.value})}/>
+                      <div className="flex gap-3">
+                        <button onClick={() => handleUpdateCustomer(c.id)} className="flex-1 bg-emerald-600/20 text-emerald-500 p-3 rounded-xl font-semibold"><Save size={18} className="inline mr-1"/> Save</button>
+                        <button onClick={() => setEditingCustomer(null)} className="flex-1 bg-slate-800 text-slate-400 p-3 rounded-xl font-semibold">Cancel</button>
                       </div>
                     </div>
                   ) : (
                     <>
-                      <button onClick={() => { setEditingCustomer(c.id); setEditForm({ name: c.name, phone: c.phone, address: c.address }); }} className="absolute top-6 right-6 text-slate-500 hover:text-blue-400 transition-colors p-2"><Edit2 size={20}/></button>
-                      <h4 className="font-bold text-xl text-slate-100 pr-10">{c.name}</h4>
+                      <button onClick={() => { setEditingCustomer(c.id); setEditForm({ name: c.name, phone: c.phone, address: c.address }); }} className="absolute top-6 right-6 text-slate-500 hover:text-blue-400 p-2"><Edit2 size={20}/></button>
+                      <h4 className="font-bold text-xl text-slate-100">{c.name}</h4>
                       <div className="text-base text-slate-400 mt-6 space-y-4">
-                        <p className="flex items-center gap-4"><Phone size={18} className="text-slate-600"/> {c.phone}</p>
-                        <p className="flex items-center gap-4"><MapPin size={18} className="text-slate-600"/> {c.address}</p>
+                        <p className="flex items-center gap-4"><Phone size={18}/> {c.phone}</p>
+                        <p className="flex items-center gap-4"><MapPin size={18}/> {c.address}</p>
                       </div>
                     </>
                   )}
@@ -226,15 +243,105 @@ export default function App() {
           </div>
         )}
 
-        {/* ... (Keep Jobs, Calendar, and Tasks tabs identical in structure but change padding classes from p-3.5 to p-4 and rounded-xl to rounded-2xl for better mobile touch response) */}
-        
-        {/* Example of Task Update for Mobile */}
+        {tab === "jobs" && (
+          <div className="space-y-8">
+            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl">
+              <h3 className="text-blue-500 font-bold mb-6 uppercase text-xs tracking-widest">Book New Job #{nextJobNumber}</h3>
+              <form onSubmit={handleAddJob} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input required className="bg-slate-950 p-4 rounded-2xl border border-slate-800 md:col-span-2" placeholder="Job Title" value={newJob.title} onChange={e => setNewJob({...newJob, title: e.target.value})}/>
+                <select required className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-slate-300" value={newJob.customer_id} onChange={e => setNewJob({...newJob, customer_id: e.target.value})}>
+                  <option value="">Select Client</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <input required type="number" className="bg-slate-950 p-4 rounded-2xl border border-slate-800" placeholder="Revenue ($)" value={newJob.revenue} onChange={e => setNewJob({...newJob, revenue: e.target.value})}/>
+                <button className="bg-blue-600 p-4 rounded-2xl font-bold md:col-span-4 mt-2 text-lg">Create Job</button>
+              </form>
+            </div>
+            <div className="grid grid-cols-1 gap-4">
+              {jobs.map(j => (
+                <div key={j.id} className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl flex flex-col md:flex-row justify-between gap-6 relative">
+                  {editingJob === j.id ? (
+                    <div className="w-full space-y-4">
+                      <input className="w-full bg-slate-950 p-3 rounded-xl border border-blue-500/50" value={editJobForm.title} onChange={e => setEditJobForm({...editJobForm, title: e.target.value})}/>
+                      <div className="flex gap-4">
+                        <input type="number" className="w-1/2 bg-slate-950 p-3 rounded-xl border border-blue-500/50" value={editJobForm.revenue} onChange={e => setEditJobForm({...editJobForm, revenue: e.target.value})}/>
+                        <select className="w-1/2 bg-slate-950 p-3 rounded-xl border border-blue-500/50 text-slate-300" value={editJobForm.status} onChange={e => setEditJobForm({...editJobForm, status: e.target.value})}>
+                          <option value="Pending">Pending</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Completed">Completed</option>
+                        </select>
+                      </div>
+                      <div className="flex gap-3">
+                        <button onClick={() => handleUpdateJob(j.id)} className="flex-1 bg-emerald-600/20 text-emerald-500 p-3 rounded-xl font-bold"><Save size={18} className="inline mr-1"/> Save</button>
+                        <button onClick={() => setEditingJob(null)} className="flex-1 bg-slate-800 text-slate-400 p-3 rounded-xl">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="bg-blue-900/40 text-blue-400 text-xs font-bold px-3 py-1 rounded-lg">#{j.job_number}</span>
+                          <h4 className="font-bold text-xl text-slate-200">{j.title}</h4>
+                        </div>
+                        <p className="text-slate-500">{j.Customers?.name || "Private Client"}</p>
+                      </div>
+                      <div className="flex items-center justify-between md:justify-end gap-6 md:w-1/3">
+                        <div className="text-left md:text-right">
+                          <p className="text-xl font-black text-slate-300">${Number(j.revenue).toLocaleString()}</p>
+                          <span className={`text-[10px] font-bold uppercase tracking-widest px-2 py-1 rounded ${j.status === 'Completed' ? 'bg-emerald-900/30 text-emerald-400' : 'bg-slate-800 text-slate-400'}`}>{j.status}</span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => { setEditingJob(j.id); setEditJobForm({ title: j.title, revenue: j.revenue, status: j.status }); }} className="p-3 bg-slate-950 rounded-xl text-slate-400 hover:text-blue-400 transition-colors border border-slate-800"><Edit2 size={20}/></button>
+                          <button onClick={() => handleDeleteJob(j.id)} className="p-3 bg-slate-950 rounded-xl text-slate-400 hover:text-red-400 transition-colors border border-slate-800"><Trash2 size={20}/></button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tab === "calendar" && (
+          <div className="space-y-8">
+            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl">
+              <h3 className="text-blue-500 font-bold mb-6 uppercase text-xs tracking-widest">Schedule New Event</h3>
+              <form onSubmit={handleAddEvent} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <input required className="bg-slate-950 p-4 rounded-2xl border border-slate-800 md:col-span-2" placeholder="Event Name" value={newEvent.title} onChange={e => setNewEvent({...newEvent, title: e.target.value})}/>
+                <input required type="date" className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-slate-300" value={newEvent.event_date} onChange={e => setNewEvent({...newEvent, event_date: e.target.value})}/>
+                <select className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-slate-300" value={newEvent.customer_id} onChange={e => setNewEvent({...newEvent, customer_id: e.target.value})}>
+                  <option value="">No Client Linked</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <button className="bg-blue-600 p-4 rounded-2xl font-bold md:col-span-4 mt-2">Add to Schedule</button>
+              </form>
+            </div>
+            <div className="space-y-4">
+              {calendarEvents.map(evt => (
+                <div key={evt.id} className="flex items-center justify-between p-6 bg-slate-900 border border-slate-800 rounded-3xl">
+                  <div className="flex items-center gap-4">
+                    <div className="bg-blue-900/30 p-4 rounded-2xl text-blue-400"><CalIcon size={24}/></div>
+                    <div>
+                      <h4 className="font-bold text-lg">{evt.title}</h4>
+                      <p className="text-sm text-slate-500">{evt.Customers?.name ? `Meeting with ${evt.Customers.name}` : 'General Event'}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-slate-300">{new Date(evt.event_date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tab === "tasks" && (
            <div className="bg-slate-900 border border-slate-800 p-6 md:p-8 rounded-3xl min-h-[500px]">
              <h3 className="text-blue-500 font-bold mb-6 uppercase text-xs tracking-widest">Master Task List</h3>
              <form onSubmit={handleAddTask} className="flex flex-col md:flex-row gap-4 mb-8">
-                <input className="flex-1 bg-slate-950 p-4 rounded-2xl border border-slate-800 text-lg outline-none focus:border-blue-500" placeholder="What needs to get done?" value={todoInput} onChange={e => setTodoInput(e.target.value)} />
-                <button className="bg-blue-600 hover:bg-blue-500 p-4 md:px-8 rounded-2xl font-bold text-lg">Add Task</button>
+                <input className="flex-1 bg-slate-950 p-4 rounded-2xl border border-slate-800 text-lg outline-none focus:border-blue-500" placeholder="New task..." value={todoInput} onChange={e => setTodoInput(e.target.value)} />
+                <button className="bg-blue-600 p-4 md:px-8 rounded-2xl font-bold text-lg">Add Task</button>
              </form>
              <div className="space-y-3">
                {tasks.map(t => (
