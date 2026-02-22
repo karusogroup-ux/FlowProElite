@@ -16,7 +16,9 @@ const STATUS_OPTIONS = ['Quote', 'Work Order', 'Completed', 'Unsuccessful'];
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // FIX: Hydration error - start with null time for React 19 / Vite compatibility
+  const [currentTime, setCurrentTime] = useState(null);
 
   const [customers, setCustomers] = useState([]);
   const [jobs, setJobs] = useState([]);
@@ -29,6 +31,8 @@ export default function App() {
   const [newTaskText, setNewTaskText] = useState("");
 
   useEffect(() => {
+    // FIX: Set time only after mounting to prevent white screen (Error #418)
+    setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     fetchData();
     return () => clearInterval(timer);
@@ -64,7 +68,10 @@ export default function App() {
   const handleUpdate = async () => {
     const { type, id, data } = editingItem;
     const table = type === 'job' ? 'Jobs' : 'Customers';
-    const { Customers, ...cleanData } = data; // REMOVES NESTED OBJECT TO PREVENT SQL ERROR
+    
+    // FIX: Remove joined 'Customers' object before sending update to Supabase
+    const { Customers, ...cleanData } = data; 
+    
     await supabase.from(table).update(cleanData).eq("id", id);
     setEditingItem(null);
     fetchData();
@@ -111,23 +118,31 @@ export default function App() {
       <main className="flex-1 overflow-y-auto p-6 md:p-12 pb-32">
         <header className="flex justify-between items-center mb-8">
           <div>
-            <p className="text-[10px] text-blue-400 font-black uppercase tracking-widest">{currentTime.toLocaleTimeString()}</p>
+            <div className="flex items-center gap-2 text-blue-400 mb-1">
+              <Clock size={14} />
+              <p className="text-[10px] font-black uppercase tracking-widest">
+                {currentTime ? currentTime.toLocaleTimeString() : "LOADING..."}
+              </p>
+            </div>
             <h2 className="text-4xl font-black uppercase tracking-tighter">{tab}</h2>
           </div>
-          <button onClick={() => setShowAddModal(true)} className="bg-blue-600 p-4 rounded-2xl shadow-xl"><Plus/></button>
+          <button onClick={() => setShowAddModal(true)} className="bg-blue-600 p-4 rounded-2xl shadow-xl transition-all active:scale-95"><Plus/></button>
         </header>
 
         {tab === "dashboard" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             <div className="bg-slate-900 p-8 rounded-[3rem] border border-slate-800 h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={chartData} innerRadius={60} outerRadius={80} dataKey="value">
-                    {chartData.map((entry, i) => <Cell key={i} fill={STATUS_COLORS[entry.name]} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+              {/* FIX: Only render chart if currentTime is set (client-side) to prevent hydration crash */}
+              {currentTime && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={chartData} innerRadius={60} outerRadius={80} dataKey="value" stroke="none">
+                      {chartData.map((entry, i) => <Cell key={i} fill={STATUS_COLORS[entry.name]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{backgroundColor: '#0f172a', borderRadius: '15px', border: 'none'}}/>
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
             </div>
             <div className="bg-gradient-to-br from-blue-600 to-indigo-800 p-10 rounded-[3rem] flex flex-col justify-center">
               <h3 className="text-blue-100 font-bold uppercase text-xs">Total Revenue</h3>
@@ -139,15 +154,15 @@ export default function App() {
         {tab === "jobs" && (
           <div className="space-y-4">
             {jobs.map(j => (
-              <div key={j.id} className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 flex justify-between items-center">
+              <div key={j.id} className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 flex justify-between items-center group hover:border-blue-500/50 transition-colors">
                 <div>
                   <h4 className="text-xl font-bold">#{j.job_number} - {j.title}</h4>
-                  <p className="text-slate-400 text-sm">{j.Customers?.name || "No Client"}</p>
+                  <p className="text-slate-400 text-sm flex items-center gap-2"><Users size={14}/> {j.Customers?.name || "No Client"}</p>
                   <span className="text-[10px] font-bold px-3 py-1 rounded-full mt-2 inline-block" style={{backgroundColor: `${STATUS_COLORS[j.status]}20`, color: STATUS_COLORS[j.status]}}>{j.status}</span>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => generatePDF(j)} className="p-2 bg-slate-800 rounded-lg text-blue-400"><Download size={20}/></button>
-                  <button onClick={() => setEditingItem({type: 'job', id: j.id, data: j})} className="p-2 bg-slate-800 rounded-lg text-slate-400"><Edit2 size={20}/></button>
+                  <button onClick={() => generatePDF(j)} className="p-2 bg-slate-800 rounded-lg text-blue-400 hover:bg-blue-600 hover:text-white transition-all"><Download size={20}/></button>
+                  <button onClick={() => setEditingItem({type: 'job', id: j.id, data: j})} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-all"><Edit2 size={20}/></button>
                 </div>
               </div>
             ))}
@@ -159,7 +174,7 @@ export default function App() {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
           <div className="bg-slate-900 w-full max-w-xl rounded-[3rem] p-10 border border-slate-800 shadow-2xl">
-            <div className="flex justify-between items-center mb-8 text-3xl font-black">NEW {tab.toUpperCase()} <button onClick={() => setShowAddModal(false)}><X/></button></div>
+            <div className="flex justify-between items-center mb-8 text-3xl font-black uppercase">NEW {tab} <button onClick={() => setShowAddModal(false)} className="p-2 bg-slate-800 rounded-full"><X/></button></div>
             {tab === 'jobs' && (
               <form onSubmit={handleAddJob} className="space-y-4">
                 <input required className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" placeholder="Job Title" onChange={e => setNewJob({...newJob, title: e.target.value})}/>
@@ -168,7 +183,7 @@ export default function App() {
                   {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
                 <input type="number" className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" placeholder="Revenue" onChange={e => setNewJob({...newJob, revenue: e.target.value})}/>
-                <button className="w-full bg-blue-600 p-6 rounded-[2rem] font-black text-xl">SAVE JOB</button>
+                <button className="w-full bg-blue-600 p-6 rounded-[2rem] font-black text-xl hover:bg-blue-500 transition-all">SAVE JOB</button>
               </form>
             )}
           </div>
@@ -179,10 +194,13 @@ export default function App() {
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
           <div className="bg-slate-900 w-full max-w-xl rounded-[3rem] p-10 border border-slate-800 shadow-2xl">
              <h3 className="text-2xl font-black mb-8">EDIT {editingItem.type.toUpperCase()}</h3>
-             <select className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800 mb-4" value={editingItem.data.status} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, status: e.target.value}})}>
+             <select className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800 mb-6" value={editingItem.data.status} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, status: e.target.value}})}>
                {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
              </select>
-             <button onClick={handleUpdate} className="w-full bg-blue-600 p-5 rounded-2xl font-black">UPDATE</button>
+             <div className="flex gap-4">
+              <button onClick={handleUpdate} className="flex-1 bg-blue-600 p-5 rounded-2xl font-black">UPDATE</button>
+              <button onClick={() => setEditingItem(null)} className="px-8 bg-slate-800 rounded-2xl font-bold">CANCEL</button>
+             </div>
           </div>
         </div>
       )}
