@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { supabase } from "./supabaseClient"; // WARNING: Ensure this matches the exact file name casing!
+import { supabase } from "./supabase"; // WARNING: Ensure this matches the exact file name casing!
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
