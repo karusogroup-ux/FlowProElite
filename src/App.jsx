@@ -4,9 +4,8 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recha
 import { jsPDF } from "jspdf";
 import "jspdf-autotable";
 import { 
-  Users, LayoutDashboard, Wrench, ListTodo, Settings as SettingsIcon,
-  Plus, Edit2, Trash2, CheckCircle2, Circle, X, DollarSign, Phone, 
-  MapPin, Save, FileText, Download, Share2, Info, Loader2
+  Users, LayoutDashboard, Wrench, ListTodo, Plus, Edit2, Trash2, 
+  X, DollarSign, Phone, FileText, Download, CheckCircle2, Circle, Clock
 } from "lucide-react";
 
 const STATUS_COLORS = {
@@ -14,68 +13,93 @@ const STATUS_COLORS = {
 };
 const STATUS_OPTIONS = ['Quote', 'Work Order', 'Completed', 'Unsuccessful'];
 
-const MENU_ITEMS = [
-  { id: "dashboard", icon: <LayoutDashboard size={20}/>, label: "Dashboard" },
-  { id: "jobs", icon: <Wrench size={20}/>, label: "Jobs" },
-  { id: "customers", icon: <Users size={20}/>, label: "Clients" },
-];
-
 export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  // Data State
   const [customers, setCustomers] = useState([]);
   const [jobs, setJobs] = useState([]);
+  const [tasks, setTasks] = useState([]);
+
+  // Form States
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  
-  // Form States
   const [newCustomer, setNewCustomer] = useState({ name: "", phone: "", address: "", email: "" });
   const [newJob, setNewJob] = useState({ title: "", customer_id: "", revenue: "", description: "" });
+  const [newTaskText, setNewTaskText] = useState("");
 
   useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     fetchData();
+    return () => clearInterval(timer);
   }, []);
 
   const fetchData = async () => {
     setLoading(true);
-    const { data: cData } = await supabase.from("Customers").select("*").order("name");
-    const { data: jData } = await supabase.from("Jobs").select("*, Customers(*)").order("job_number", { ascending: false });
-    
-    if (cData) setCustomers(cData);
-    if (jData) setJobs(jData);
-    setLoading(false);
-  };
-
-  // --- BUG FIX: STRIP NESTED OBJECTS BEFORE UPDATE ---
-  const handleUpdate = async () => {
     try {
-      const { type, id, data } = editingItem;
-      const table = type === 'job' ? 'Jobs' : 'Customers';
-      
-      // We remove the joined 'Customers' object so Supabase doesn't get confused
-      const { Customers, ...cleanData } = data; 
-
-      const { error } = await supabase.from(table).update(cleanData).eq("id", id);
-      if (error) throw error;
-      
-      setEditingItem(null);
-      fetchData();
-    } catch (err) {
-      alert("Update failed: " + err.message);
+      const [cRes, jRes, tRes] = await Promise.all([
+        supabase.from("Customers").select("*").order("name"),
+        supabase.from("Jobs").select("*, Customers(*)").order("job_number", { ascending: false }),
+        supabase.from("Tasks").select("*").order("created_at", { ascending: false })
+      ]);
+      if (cRes.data) setCustomers(cRes.data);
+      if (jRes.data) setJobs(jRes.data);
+      if (tRes.data) setTasks(tRes.data);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const addJob = async (e) => {
+  // --- CRUD FUNCTIONS (FIXED) ---
+  const handleAddCustomer = async (e) => {
     e.preventDefault();
-    const { error } = await supabase.from("Jobs").insert([{
-      ...newJob,
-      revenue: parseFloat(newJob.revenue || 0),
-      status: 'Quote'
-    }]);
-    
+    const { error } = await supabase.from("Customers").insert([newCustomer]);
+    if (!error) {
+      setNewCustomer({ name: "", phone: "", address: "", email: "" });
+      setShowAddModal(false);
+      fetchData();
+    }
+  };
+
+  const handleAddJob = async (e) => {
+    e.preventDefault();
+    const payload = { ...newJob, revenue: parseFloat(newJob.revenue || 0), status: 'Quote' };
+    const { error } = await supabase.from("Jobs").insert([payload]);
     if (!error) {
       setNewJob({ title: "", customer_id: "", revenue: "", description: "" });
       setShowAddModal(false);
+      fetchData();
+    }
+  };
+
+  const handleAddTask = async (e) => {
+    e.preventDefault();
+    if (!newTaskText) return;
+    await supabase.from("Tasks").insert([{ task_text: newTaskText }]);
+    setNewTaskText("");
+    fetchData();
+  };
+
+  const toggleTask = async (id, status) => {
+    await supabase.from("Tasks").update({ is_completed: !status }).eq("id", id);
+    fetchData();
+  };
+
+  const handleUpdate = async () => {
+    const { type, id, data } = editingItem;
+    const table = type === 'job' ? 'Jobs' : 'Customers';
+    // Fix: Remove joined object before update
+    const { Customers, ...cleanData } = data; 
+    await supabase.from(table).update(cleanData).eq("id", id);
+    setEditingItem(null);
+    fetchData();
+  };
+
+  const handleDelete = async (table, id) => {
+    if (window.confirm("Delete permanently?")) {
+      await supabase.from(table).delete().eq("id", id);
       fetchData();
     }
   };
@@ -88,98 +112,98 @@ export default function App() {
     doc.setFontSize(22);
     doc.text("FLOWPRO SYSTEMS", 14, 25);
     doc.setTextColor(0, 0, 0);
-    doc.text(`Job #${job.job_number}`, 14, 55);
+    doc.setFontSize(12);
+    doc.text(`JOB #${job.job_number} - ${job.title}`, 14, 55);
     doc.autoTable({
-      startY: 70,
-      head: [['Description', 'Status', 'Total']],
-      body: [[job.title, job.status, `$${job.revenue}`]],
+      startY: 65,
+      head: [['Client', 'Status', 'Total Value']],
+      body: [[job.Customers?.name || 'N/A', job.status, `$${job.revenue}`]],
     });
-    doc.save(`Job_${job.job_number}.pdf`);
+    doc.save(`FlowPro_${job.job_number}.pdf`);
   };
 
-  const chartData = useMemo(() => 
-    STATUS_OPTIONS.map(s => ({ name: s, value: jobs.filter(j => j.status === s).length })), 
-  [jobs]);
+  const chartData = useMemo(() => STATUS_OPTIONS.map(s => ({ name: s, value: jobs.filter(j => j.status === s).length })), [jobs]);
 
-  if (loading && jobs.length === 0) return (
-    <div className="h-screen bg-slate-950 flex items-center justify-center text-blue-500 font-bold animate-pulse">
-      <Loader2 className="animate-spin mr-2" /> LOADING FLOWPRO...
-    </div>
-  );
+  if (loading && jobs.length === 0) return <div className="h-screen bg-slate-950 flex items-center justify-center text-blue-500 font-black animate-pulse text-2xl">FLOWPRO</div>;
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-[#020617] text-slate-100 overflow-hidden">
-      {/* Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-slate-900 border-r border-slate-800 p-6">
-        <h1 className="text-2xl font-black text-blue-500 mb-10 italic">FLOWPRO</h1>
-        <nav className="space-y-2">
-          {MENU_ITEMS.map(item => (
-            <button key={item.id} onClick={() => setTab(item.id)} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${tab === item.id ? "bg-blue-600 shadow-lg" : "text-slate-400 hover:bg-slate-800"}`}>
-              {item.icon} <span className="font-semibold">{item.label}</span>
+    <div className="flex flex-col md:flex-row h-screen bg-[#020617] text-slate-100 overflow-hidden font-sans">
+      
+      {/* SIDEBAR NAVIGATION */}
+      <aside className="hidden md:flex flex-col w-72 bg-slate-900 border-r border-slate-800 p-8">
+        <h1 className="text-3xl font-black text-blue-500 mb-12 italic tracking-tighter">FLOWPRO</h1>
+        <nav className="space-y-3">
+          {[
+            { id: "dashboard", icon: <LayoutDashboard />, label: "Dashboard" },
+            { id: "jobs", icon: <Wrench />, label: "Jobs" },
+            { id: "customers", icon: <Users />, label: "Clients" },
+            { id: "tasks", icon: <ListTodo />, label: "To-Do List" }
+          ].map(item => (
+            <button key={item.id} onClick={() => setTab(item.id)} className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${tab === item.id ? "bg-blue-600 shadow-lg" : "text-slate-400 hover:bg-slate-800"}`}>
+              {item.icon} <span className="font-bold">{item.label}</span>
             </button>
           ))}
         </nav>
       </aside>
 
-      <main className="flex-1 overflow-y-auto p-6 md:p-10 pb-24">
-        <div className="flex justify-between items-center mb-10">
-          <h2 className="text-3xl font-bold capitalize">{tab}</h2>
-          <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-500 p-3 rounded-xl shadow-lg transition-transform active:scale-95">
-            <Plus size={24}/>
+      <main className="flex-1 overflow-y-auto p-6 md:p-12 pb-32">
+        <header className="flex justify-between items-center mb-8">
+          <div>
+            <div className="flex items-center gap-2 text-blue-400 mb-1">
+              <Clock size={14} />
+              <p className="text-[10px] font-black uppercase tracking-widest">{currentTime.toLocaleTimeString()}</p>
+            </div>
+            <h2 className="text-4xl font-black uppercase tracking-tighter">{tab}</h2>
+          </div>
+          <button onClick={() => setShowAddModal(true)} className="bg-blue-600 hover:bg-blue-500 p-4 rounded-2xl shadow-xl transition-all active:scale-90">
+            <Plus size={28}/>
           </button>
-        </div>
+        </header>
 
+        {/* DASHBOARD TAB */}
         {tab === "dashboard" && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
-              <h3 className="text-slate-400 text-sm font-bold mb-4 uppercase">Job Distribution</h3>
-              <div className="h-64">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <div className="bg-slate-900 p-8 rounded-[3rem] border border-slate-800">
+              <div className="h-[250px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={chartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                    <Pie data={chartData} innerRadius={60} outerRadius={80} paddingAngle={8} dataKey="value" stroke="none">
                       {chartData.map((entry, i) => <Cell key={i} fill={STATUS_COLORS[entry.name]} />)}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip contentStyle={{backgroundColor: '#0f172a', borderRadius: '15px', border: 'none'}}/>
+                    <Legend />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            <div className="bg-gradient-to-br from-blue-600 to-indigo-700 p-8 rounded-3xl flex flex-col justify-center shadow-xl">
-              <p className="text-blue-100 font-medium">Total Revenue Pipeline</p>
-              <h4 className="text-5xl font-black mt-2">${jobs.reduce((a, b) => a + Number(b.revenue || 0), 0).toLocaleString()}</h4>
-              <div className="flex gap-4 mt-6 text-sm">
-                 <div className="bg-white/10 p-3 rounded-xl flex-1">
-                   <p className="opacity-70">Active Jobs</p>
-                   <p className="text-xl font-bold">{jobs.length}</p>
-                 </div>
-                 <div className="bg-white/10 p-3 rounded-xl flex-1">
-                   <p className="opacity-70">Customers</p>
-                   <p className="text-xl font-bold">{customers.length}</p>
-                 </div>
-              </div>
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-800 p-10 rounded-[3rem] shadow-2xl flex flex-col justify-center">
+              <h3 className="text-blue-100 font-bold uppercase text-xs tracking-widest mb-2">Total Revenue Pipeline</h3>
+              <p className="text-6xl font-black text-white tracking-tighter">${jobs.reduce((a, b) => a + Number(b.revenue || 0), 0).toLocaleString()}</p>
             </div>
           </div>
         )}
 
+        {/* JOBS TAB */}
         {tab === "jobs" && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {jobs.map(j => (
-              <div key={j.id} className="bg-slate-900 p-5 rounded-2xl border border-slate-800 flex justify-between items-center group hover:border-blue-500/50 transition-colors">
+              <div key={j.id} className="bg-slate-900 p-6 rounded-[2rem] border border-slate-800 flex justify-between items-center group">
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded font-mono">#{j.job_number}</span>
-                    <h4 className="font-bold text-lg">{j.title}</h4>
+                  <div className="flex items-center gap-3 mb-1">
+                    <span className="bg-slate-800 text-slate-400 text-[10px] font-black px-2 py-1 rounded">#{j.job_number}</span>
+                    <h4 className="text-xl font-bold">{j.title}</h4>
                   </div>
-                  <p className="text-slate-400 text-sm mb-2">{j.Customers?.name || 'Walk-in'}</p>
-                  <span className="text-[10px] font-bold px-2 py-1 rounded-full uppercase" style={{backgroundColor: `${STATUS_COLORS[j.status]}20`, color: STATUS_COLORS[j.status]}}>
-                    {j.status}
-                  </span>
+                  <p className="text-slate-400 text-sm flex items-center gap-2"><Users size={14}/> {j.Customers?.name}</p>
+                  <div className="mt-3">
+                    <span className="text-[10px] font-black px-3 py-1 rounded-full" style={{backgroundColor: `${STATUS_COLORS[j.status]}20`, color: STATUS_COLORS[j.status]}}>{j.status}</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-black text-emerald-400 mb-2">${Number(j.revenue).toLocaleString()}</p>
+                <div className="text-right flex flex-col items-end gap-3">
+                  <p className="text-2xl font-black text-emerald-400">${Number(j.revenue).toLocaleString()}</p>
                   <div className="flex gap-2">
-                    <button onClick={() => generatePDF(j)} className="p-2 bg-slate-800 rounded-lg text-blue-400 hover:bg-blue-600 hover:text-white transition-all"><Download size={18}/></button>
-                    <button onClick={() => setEditingItem({type: 'job', id: j.id, data: j})} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white"><Edit2 size={18}/></button>
+                    <button onClick={() => generatePDF(j)} className="p-2 bg-slate-800 rounded-lg text-blue-400 hover:bg-blue-600 hover:text-white transition-all"><Download size={20}/></button>
+                    <button onClick={() => setEditingItem({type: 'job', id: j.id, data: j})} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white"><Edit2 size={20}/></button>
+                    <button onClick={() => handleDelete('Jobs', j.id)} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-red-500"><Trash2 size={20}/></button>
                   </div>
                 </div>
               </div>
@@ -187,39 +211,100 @@ export default function App() {
           </div>
         )}
 
-        {/* Edit Modal (Universal) */}
-        {editingItem && (
-          <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 w-full max-w-md rounded-3xl p-8 border border-slate-800 shadow-2xl">
-              <h3 className="text-xl font-bold mb-6">Edit {editingItem.type === 'job' ? 'Job Details' : 'Customer'}</h3>
-              <div className="space-y-4">
-                {editingItem.type === 'job' && (
-                  <>
-                    <input className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800" value={editingItem.data.title} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, title: e.target.value}})}/>
-                    <select className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800" value={editingItem.data.status} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, status: e.target.value}})}>
-                      {STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
-                    </select>
-                    <input type="number" className="w-full bg-slate-950 p-4 rounded-xl border border-slate-800" value={editingItem.data.revenue} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, revenue: e.target.value}})}/>
-                  </>
-                )}
-                <div className="flex gap-3 mt-6">
-                  <button onClick={handleUpdate} className="flex-1 bg-blue-600 p-4 rounded-xl font-bold">Save Changes</button>
-                  <button onClick={() => setEditingItem(null)} className="px-6 bg-slate-800 rounded-xl">Cancel</button>
+        {/* CUSTOMERS TAB */}
+        {tab === "customers" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {customers.map(c => (
+              <div key={c.id} className="bg-slate-900 p-6 rounded-3xl border border-slate-800">
+                <div className="w-12 h-12 bg-blue-600 rounded-2xl flex items-center justify-center font-black text-xl mb-4">{c.name[0]}</div>
+                <h4 className="text-xl font-black">{c.name}</h4>
+                <p className="text-slate-500 text-sm mb-4">{c.address || 'No Address'}</p>
+                <div className="flex gap-3 border-t border-slate-800 pt-4">
+                  <a href={`tel:${c.phone}`} className="text-blue-500 font-bold flex items-center gap-2 text-sm"><Phone size={14}/> Call</a>
+                  <button onClick={() => setEditingItem({type: 'customer', id: c.id, data: c})} className="ml-auto text-slate-500"><Edit2 size={16}/></button>
                 </div>
               </div>
+            ))}
+          </div>
+        )}
+
+        {/* TASKS TAB (RESTORED) */}
+        {tab === "tasks" && (
+          <div className="max-w-2xl mx-auto">
+            <form onSubmit={handleAddTask} className="flex gap-4 mb-8">
+              <input className="flex-1 bg-slate-900 border border-slate-800 p-4 rounded-2xl outline-none focus:border-blue-500" placeholder="New task..." value={newTaskText} onChange={e => setNewTaskText(e.target.value)} />
+              <button className="bg-blue-600 px-6 rounded-2xl font-bold">ADD</button>
+            </form>
+            <div className="space-y-3">
+              {tasks.map(t => (
+                <div key={t.id} onClick={() => toggleTask(t.id, t.is_completed)} className={`flex items-center gap-4 p-5 bg-slate-900 rounded-2xl border border-slate-800 cursor-pointer transition-all ${t.is_completed ? "opacity-40" : ""}`}>
+                  {t.is_completed ? <CheckCircle2 className="text-emerald-500"/> : <Circle className="text-slate-600"/>}
+                  <span className={`text-lg ${t.is_completed ? "line-through" : ""}`}>{t.task_text}</span>
+                  <button onClick={(e) => { e.stopPropagation(); handleDelete('Tasks', t.id); }} className="ml-auto text-slate-600 hover:text-red-500"><Trash2 size={18}/></button>
+                </div>
+              ))}
             </div>
           </div>
         )}
       </main>
-      
-      {/* Mobile Nav */}
-      <nav className="md:hidden fixed bottom-0 w-full bg-slate-900/90 backdrop-blur-lg border-t border-slate-800 flex justify-around p-4">
-        {MENU_ITEMS.map(item => (
-          <button key={item.id} onClick={() => setTab(item.id)} className={`p-2 ${tab === item.id ? "text-blue-500" : "text-slate-500"}`}>
-            {item.icon}
-          </button>
-        ))}
-      </nav>
+
+      {/* MODALS (FIXED FOR ADDING) */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+          <div className="bg-slate-900 w-full max-w-xl rounded-[3rem] p-10 border border-slate-800 shadow-2xl">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-3xl font-black italic underline decoration-blue-500 uppercase">NEW {tab === 'jobs' ? 'Project' : 'Client'}</h3>
+              <button onClick={() => setShowAddModal(false)} className="p-3 bg-slate-800 rounded-full"><X/></button>
+            </div>
+            
+            {tab === 'jobs' ? (
+              <form onSubmit={handleAddJob} className="space-y-4">
+                <input required className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" placeholder="Project Name" onChange={e => setNewJob({...newJob, title: e.target.value})}/>
+                <select required className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800 appearance-none" onChange={e => setNewJob({...newJob, customer_id: e.target.value})}>
+                  <option value="">Select Client</option>
+                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+                <div className="relative">
+                  <DollarSign className="absolute left-5 top-5 text-slate-500"/>
+                  <input type="number" className="w-full bg-slate-950 p-5 pl-12 rounded-2xl border border-slate-800" placeholder="Price" onChange={e => setNewJob({...newJob, revenue: e.target.value})}/>
+                </div>
+                <button className="w-full bg-blue-600 p-6 rounded-[2rem] font-black text-xl hover:bg-blue-500 transition-all shadow-xl shadow-blue-900/40">BOOK JOB</button>
+              </form>
+            ) : (
+              <form onSubmit={handleAddCustomer} className="space-y-4">
+                <input required className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" placeholder="Client Name" onChange={e => setNewCustomer({...newCustomer, name: e.target.value})}/>
+                <input className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" placeholder="Phone" onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})}/>
+                <input className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" placeholder="Address" onChange={e => setNewCustomer({...newCustomer, address: e.target.value})}/>
+                <button className="w-full bg-emerald-600 p-6 rounded-[2rem] font-black text-xl">SAVE CLIENT</button>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL (FOR JOBS/STATUS) */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-6">
+          <div className="bg-slate-900 w-full max-w-xl rounded-[3rem] p-10 border border-slate-800 shadow-2xl">
+             <h3 className="text-2xl font-black mb-8">EDIT {editingItem.type.toUpperCase()}</h3>
+             <div className="space-y-4">
+               {editingItem.type === 'job' && (
+                 <>
+                  <input className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" value={editingItem.data.title} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, title: e.target.value}})}/>
+                  <select className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" value={editingItem.data.status} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, status: e.target.value}})}>
+                    {STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                  </select>
+                  <input type="number" className="w-full bg-slate-950 p-5 rounded-2xl border border-slate-800" value={editingItem.data.revenue} onChange={e => setEditingItem({...editingItem, data: {...editingItem.data, revenue: e.target.value}})}/>
+                 </>
+               )}
+               <div className="flex gap-4 pt-4">
+                 <button onClick={handleUpdate} className="flex-1 bg-blue-600 p-5 rounded-2xl font-black text-lg">UPDATE</button>
+                 <button onClick={() => setEditingItem(null)} className="px-8 bg-slate-800 rounded-2xl font-bold">CANCEL</button>
+               </div>
+             </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
