@@ -2,17 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Quick scrollbar styling to fit your dark theme */
+@layer base {
+  body {
+    @apply bg-slate-50 text-slate-900 transition-colors duration-300 antialiased;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  .dark body {
+    @apply bg-brand-black text-slate-100;
+  }
+}
+
+@layer components {
+  /* --- Bespoke Modal Inputs --- */
+  .modal-input {
+    @apply w-full bg-white dark:bg-zinc-900 
+           border border-slate-200 dark:border-zinc-800 
+           p-4 rounded-2xl outline-none 
+           focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500
+           transition-all duration-200 font-semibold 
+           text-slate-900 dark:text-white 
+           placeholder:text-slate-400 dark:placeholder:text-zinc-600;
+  }
+
+  /* --- Glassmorphism Panels --- */
+  .glass-card {
+    @apply backdrop-blur-xl bg-white/70 dark:bg-zinc-900/70 
+           border border-white/20 dark:border-white/5 shadow-xl;
+  }
+
+  /* --- Neo-Action Buttons --- */
+  .btn-primary {
+    @apply bg-brand-500 hover:bg-brand-600 text-white 
+           shadow-lg shadow-brand-500/25 active:scale-95 
+           transition-all duration-200 font-black uppercase tracking-widest;
+  }
+}
+
+/* --- Premium Custom Scrollbar --- */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 5px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #020617; 
+  @apply bg-transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #1e293b; 
-  border-radius: 10px;
+  @apply bg-slate-300 dark:bg-zinc-800 rounded-full;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b82f6; 
+  @apply bg-slate-400 dark:bg-zinc-700;
+}
+
+/* --- Recharts Overrides for Dark Mode --- */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  @apply stroke-slate-200 dark:stroke-zinc-800;
+}
+
+.recharts-tooltip-cursor {
+  @apply fill-slate-100/50 dark:fill-zinc-800/50;
+}
+
+/* --- Chart Legend Typography --- */
+.recharts-default-legend {
+  @apply !mt-4 !text-[10px] font-black uppercase tracking-tighter;
 }
