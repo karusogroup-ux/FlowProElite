@@ -5,12 +5,11 @@ import { generateJobPDF } from "./utils/pdfGenerator";
 import { 
   Users, LayoutDashboard, Wrench, ListTodo, Plus, Edit2, Trash2, 
   X, Download, Clock, Phone, Mail, MapPin, CheckCircle2, Circle, 
-  FileText, Receipt, Sun, Moon, Settings, Archive, CheckSquare, Square, 
-  TrendingUp, Search, MessageSquare, DollarSign
+  Settings, CheckSquare, Square, TrendingUp, Search
 } from "lucide-react";
 
-// --- UNIFIED CONFIG & CONSTANTS ---
-// Keys now exactly match the Supabase Database Check Constraint
+// --- CONFIG & CONSTANTS ---
+
 const STATUS_CONFIG = {
   'Quote': { label: 'Quote', color: '#ef4444' },
   'Work Order': { label: 'Work Order', color: '#facc15' },
@@ -24,14 +23,6 @@ const FLAG_CONFIG = {
   invoice_sent: { label: 'Invoice', color: '#3b82f6', pdfType: 'invoice' },
   report_sent: { label: 'Complete/Report', color: '#22c55e', pdfType: 'report' }
 };
-
-const NAV_ITEMS = [
-  { id: "dashboard", icon: <LayoutDashboard size={24}/>, label: "Stats" },
-  { id: "jobs", icon: <Wrench size={24}/>, label: "Jobs" },
-  { id: "customers", icon: <Users size={24}/>, label: "Clients" },
-  { id: "tasks", icon: <ListTodo size={24}/>, label: "Tasks" },
-  { id: "settings", icon: <Settings size={24}/>, label: "Archv" }
-];
 
 // --- SUB-COMPONENTS ---
 
@@ -49,13 +40,6 @@ const LiveClock = React.memo(() => {
   );
 });
 
-const HealthRow = ({ label, value, color, size = "text-3xl md:text-5xl" }) => (
-  <div className="animate-slide-up">
-    <p className="text-[9px] md:text-[10px] font-black uppercase text-zinc-500 mb-1 md:mb-2 tracking-widest">{label}</p>
-    <p className={`${size} font-black ${color} tracking-tighter`}>${value.toLocaleString()}</p>
-  </div>
-);
-
 const QuickActionButton = ({ label, icon, onClick, color }) => (
   <button onClick={onClick} className="flex flex-col items-center justify-center gap-2 md:gap-3 p-4 md:p-6 rounded-[2rem] md:rounded-[2.5rem] bg-white/[0.03] border border-white/5 active:scale-95 transition-all group w-full">
     <div className={`${color} p-3 md:p-4 rounded-xl md:rounded-2xl text-black shadow-lg group-hover:rotate-6 transition-transform`}>{icon}</div>
@@ -63,29 +47,126 @@ const QuickActionButton = ({ label, icon, onClick, color }) => (
   </button>
 );
 
+function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) alert(error.message);
+    setLoading(false);
+  };
+
+  return (
+    <div className="h-screen bg-black flex items-center justify-center p-4">
+      <form onSubmit={handleLogin} className="glass p-8 md:p-12 rounded-[2rem] md:rounded-[3rem] w-full max-w-md animate-slide-up border border-white/10">
+        <h2 className="text-3xl md:text-4xl font-black text-center mb-2 tracking-tighter uppercase italic">Elite Login</h2>
+        <p className="text-center text-zinc-500 font-bold uppercase text-[10px] tracking-widest mb-8">Identify Yourself</p>
+        
+        <div className="space-y-4">
+          <div className="space-y-1">
+             <label className="text-[9px] font-black uppercase text-green-500 tracking-widest ml-2">Email</label>
+             <input 
+               type="email" 
+               value={email} onChange={(e) => setEmail(e.target.value)}
+               className="w-full bg-white/5 border border-white/10 p-4 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-green-500 transition-colors"
+               placeholder="Enter access email"
+             />
+          </div>
+          
+          <div className="space-y-1">
+             <label className="text-[9px] font-black uppercase text-green-500 tracking-widest ml-2">Password</label>
+             <input 
+               type="password" 
+               value={password} onChange={(e) => setPassword(e.target.value)}
+               className="w-full bg-white/5 border border-white/10 p-4 rounded-xl md:rounded-2xl text-white font-bold outline-none focus:border-green-500 transition-colors"
+               placeholder="Enter access code"
+             />
+          </div>
+
+          <button disabled={loading} className="w-full bg-green-500 text-black font-black p-4 rounded-xl md:rounded-2xl uppercase tracking-widest hover:scale-105 active:scale-95 transition-all mt-4 shadow-[0_0_20px_rgba(34,197,94,0.3)]">
+            {loading ? 'Authenticating...' : 'Enter Dashboard'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // --- MAIN APP ---
 
 export default function App() {
+  // State
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [isRestrictedUser, setIsRestrictedUser] = useState(false);
+  
   const [tab, setTab] = useState("dashboard");
-  const [isDarkMode, setIsDarkMode] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [data, setData] = useState({ customers: [], jobs: [], tasks: [] });
+  const [data, setData] = useState({ customers: [], jobs: [], tasks: [], home_tasks: [] });
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
 
   const haptic = useCallback((ms = 10) => { if (navigator.vibrate) navigator.vibrate(ms); }, []);
 
+  // 1. Check Authentication & User Role
+  useEffect(() => {
+    const checkUserRole = (user) => {
+      setCurrentUser(user);
+      // REPLACE with your partner's actual email
+      if (user?.email === 'partner@example.com') {
+        setIsRestrictedUser(true);
+        setTab('home_tasks');
+      } else {
+        setIsRestrictedUser(false);
+      }
+    };
+
+    // Initial Session Check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session?.user) checkUserRole(session.user);
+      setLoading(false);
+    });
+
+    // Listen for Auth Changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session?.user) checkUserRole(session.user);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // 2. Fetch Data
   const fetchAll = async () => {
-    const [c, j, t] = await Promise.all([
+    // Only fetch if logged in
+    if (!session) return; 
+
+    const [c, j, t, h] = await Promise.all([
       supabase.from("Customers").select("*").order("name"),
       supabase.from("Jobs").select("*, Customers(*), LineItems(*)").order("job_number", { ascending: false }),
-      supabase.from("Tasks").select("*").order("created_at", { ascending: false })
+      supabase.from("Tasks").select("*").order("created_at", { ascending: false }),
+      supabase.from("home_tasks").select("*").order("created_at", { ascending: false })
     ]);
-    setData({ customers: c.data || [], jobs: j.data || [], tasks: t.data || [] });
+    
+    setData({ 
+      customers: c.data || [], 
+      jobs: j.data || [], 
+      tasks: t.data || [], 
+      home_tasks: h.data || [] 
+    });
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => {
+    if (session) fetchAll();
+  }, [session]);
 
+  // 3. Calculated Stats
   const stats = useMemo(() => {
     const activeJobs = data.jobs.filter(j => !j.is_archived);
     const rev = activeJobs.reduce((a, b) => a + Number(b.revenue || 0), 0);
@@ -99,6 +180,23 @@ export default function App() {
     };
   }, [data.jobs]);
 
+  // 4. Dynamic Navigation
+  const currentNavItems = isRestrictedUser 
+    ? [ { id: "home_tasks", icon: <CheckSquare size={24}/>, label: "Home" } ]
+    : [
+        { id: "dashboard", icon: <LayoutDashboard size={24}/>, label: "Stats" },
+        { id: "jobs", icon: <Wrench size={24}/>, label: "Jobs" },
+        { id: "customers", icon: <Users size={24}/>, label: "Clients" },
+        { id: "tasks", icon: <ListTodo size={24}/>, label: "Tasks" },
+        { id: "home_tasks", icon: <CheckSquare size={24}/>, label: "Home" },
+        { id: "settings", icon: <Settings size={24}/>, label: "Archv" }
+      ];
+
+  // --- RENDER LOGIC ---
+
+  if (loading) return null; // Or a loading spinner
+  if (!session) return <LoginScreen />;
+
   return (
     <div className="flex flex-col h-screen bg-black text-white overflow-hidden">
       
@@ -108,7 +206,7 @@ export default function App() {
           <div>
             <LiveClock />
             <h2 className="text-3xl md:text-5xl font-black tracking-tighter italic uppercase underline decoration-green-500 decoration-4 md:decoration-8 underline-offset-4 md:underline-offset-8">
-              {tab === 'dashboard' ? 'Overview' : tab}
+              {tab === 'dashboard' ? 'Overview' : tab === 'home_tasks' ? 'Home' : tab}
             </h2>
           </div>
           <button onClick={() => { haptic(20); setEditingItem(null); setShowAddModal(true); }} 
@@ -133,8 +231,8 @@ export default function App() {
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
                <div className="glass p-5 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] flex flex-col items-center justify-center col-span-2 md:col-span-1">
-                  <p className="text-zinc-500 font-black text-[9px] md:text-[10px] uppercase mb-1">Active Jobs</p>
-                  <p className="text-4xl md:text-5xl font-black">{stats.count}</p>
+                 <p className="text-zinc-500 font-black text-[9px] md:text-[10px] uppercase mb-1">Active Jobs</p>
+                 <p className="text-4xl md:text-5xl font-black">{stats.count}</p>
                </div>
                <div className="glass p-4 md:p-8 rounded-[1.5rem] md:rounded-[2.5rem] col-span-2 flex justify-around items-center gap-3">
                   <QuickActionButton label="Add Job" icon={<Wrench size={20} className="md:w-6 md:h-6"/>} color="bg-green-500" onClick={() => { setTab('jobs'); setShowAddModal(true); }} />
@@ -191,6 +289,22 @@ export default function App() {
           </div>
         )}
 
+        {tab === "home_tasks" && (
+          <div className="space-y-2 md:space-y-3 animate-slide-up max-w-2xl mx-auto">
+            <h3 className="text-2xl font-black text-center mb-4 text-green-500 uppercase">Home Tasks</h3>
+            {data.home_tasks?.map(t => (
+              <div key={t.id} className={`glass p-4 md:p-6 rounded-2xl md:rounded-[2rem] flex items-center justify-between transition-all ${t.is_complete ? 'opacity-30 grayscale' : ''}`}>
+                <div className="flex items-center gap-3 md:gap-5 cursor-pointer flex-1" onClick={async () => { haptic(15); await supabase.from("home_tasks").update({ is_complete: !t.is_complete }).eq("id", t.id); fetchAll(); }}>
+                  {t.is_complete ? <CheckCircle2 className="text-green-500 shrink-0" size={24} /> : <Circle className="text-zinc-700 shrink-0" size={24}/>}
+                  <span className={`text-base md:text-lg ${t.is_complete ? 'line-through' : 'font-bold'}`}>{t.task_name}</span>
+                </div>
+                <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from("home_tasks").delete().eq("id", t.id); fetchAll(); }}} className="p-2 md:p-3 text-zinc-600 hover:text-red-500 ml-2"><Trash2 size={18} className="md:w-5 md:h-5"/></button>
+              </div>
+            ))}
+             {(!data.home_tasks || data.home_tasks.length === 0) && <div className="text-center text-zinc-500 mt-10">No home tasks active.</div>}
+          </div>
+        )}
+
         {tab === "settings" && (
            <div className="animate-slide-up space-y-4 md:space-y-6">
            <h3 className="text-xl md:text-2xl font-black px-2">Archive</h3>
@@ -200,13 +314,16 @@ export default function App() {
                     <button onClick={async () => { await supabase.from("Jobs").update({ is_archived: false }).eq("id", j.id); fetchAll(); }} className="px-4 py-2 md:px-6 bg-white text-black rounded-lg md:rounded-xl text-[9px] md:text-[10px] font-black uppercase">Restore</button>
                </div>
            ))}
+           <div className="pt-8">
+             <button onClick={() => supabase.auth.signOut()} className="w-full p-4 bg-red-500/10 text-red-500 rounded-2xl font-black uppercase">Logout</button>
+           </div>
        </div>
         )}
       </main>
 
       {/* Floating Elite Dock */}
       <nav className="md:hidden fixed bottom-6 left-4 right-4 h-16 glass rounded-[2rem] flex justify-around items-center z-50 px-2 shadow-2xl">
-        {NAV_ITEMS.map(item => (
+        {currentNavItems.map(item => (
           <button key={item.id} onClick={() => { haptic(10); setTab(item.id); }} 
             className={`flex flex-col items-center gap-1 transition-all duration-300 ${tab === item.id ? "tab-active scale-110" : "text-zinc-600"}`}>
             {React.cloneElement(item.icon, { size: 20, strokeWidth: tab === item.id ? 2.5 : 2 })}
@@ -229,7 +346,6 @@ export default function App() {
 }
 
 function JobCard({ job, onToggleFlag, onArchive, onEdit }) {
-  // Safe fallback if database has an empty or unmatched status
   const jobStatus = STATUS_CONFIG[job.status] ? job.status : 'Quote';
 
   return (
@@ -294,13 +410,15 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
   const tableSchemas = {
     Jobs: ['title', 'status', 'customer_id', 'revenue', 'costs', 'notes', 'quote_sent', 'work_order_sent', 'invoice_sent', 'report_sent', 'is_archived'],
     Customers: ['name', 'phone', 'email', 'address'],
-    Tasks: ['task_text', 'is_completed']
+    Tasks: ['task_text', 'is_completed'],
+    HomeTasks: ['task_name', 'is_complete']
   };
 
   const [form, setForm] = useState(item || { 
     title: '', status: 'Quote', revenue: 0, costs: 0, notes: '', 
     name: '', phone: '', email: '', address: '', task_text: '',
-    quote_sent: false, work_order_sent: false, invoice_sent: false, report_sent: false, customer_id: ''
+    quote_sent: false, work_order_sent: false, invoice_sent: false, report_sent: false, customer_id: '',
+    task_name: '', is_complete: false // Defaults for HomeTasks
   });
 
   const addLineItem = () => {
@@ -323,7 +441,6 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
     const cleanData = Object.keys(form).filter(k => allowed.includes(k)).reduce((o, k) => { o[k] = form[k]; return o; }, {});
     
     if (type === 'Jobs') {
-      // 1. Save the Job and ask Supabase to return the newly created/updated record
       const { data: jobData, error: jobError } = isEdit 
         ? await supabase.from('Jobs').update(cleanData).eq('id', item.id).select()
         : await supabase.from('Jobs').insert([cleanData]).select();
@@ -332,12 +449,10 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
       
       const jobId = jobData[0].id;
 
-      // 2. Clear out old line items if we are editing an existing job
       if (isEdit) {
          await supabase.from('LineItems').delete().eq('job_id', jobId);
       }
       
-      // 3. Insert the new line items attached to this specific job
       if (form.LineItems && form.LineItems.length > 0) {
         const itemsToInsert = form.LineItems.map(li => ({
           job_id: jobId,
@@ -349,7 +464,6 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
       }
       onSuccess();
     } else {
-      // Standard save for Customers and Tasks
       const { error } = isEdit ? await supabase.from(table).update(cleanData).eq('id', item.id) : await supabase.from(table).insert([cleanData]);
       if (!error) onSuccess(); else alert(error.message);
     }
@@ -364,6 +478,15 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
+          
+          {type === 'HomeTasks' && (
+            <input required className="w-full bg-white/5 border border-white/10 p-4 md:p-5 rounded-xl md:rounded-2xl text-sm md:text-base font-bold outline-none focus:border-green-500/50" 
+            placeholder="Home Task Name" 
+            value={form.task_name} 
+            onChange={e => setForm({...form, task_name: e.target.value})} 
+            />
+          )}
+
           {type === 'Jobs' && (
             <>
               <input required className="w-full bg-white/5 border border-white/10 p-4 md:p-5 rounded-xl md:rounded-2xl text-sm md:text-base font-bold outline-none focus:border-green-500/50" placeholder="Project Name" value={form.title} onChange={e => setForm({...form, title: e.target.value})} />
