@@ -117,14 +117,19 @@ export default function App() {
   useEffect(() => {
     const checkUserRole = (user) => {
       setCurrentUser(user);
-      // REPLACE with your partner's actual email
-      if (user?.email === 'partner@example.com') {
+      
+      const email = user?.email; // Case sensitive check usually fine, but be careful
+      
+      // STRICT CHECK FOR ANTHONY
+      if (email === 'anthony@karusogroup.com') {
         setIsRestrictedUser(true);
-        setTab('home_tasks');
+        setTab('home_tasks'); // Force him to Home Tasks
       } else {
         setIsRestrictedUser(false);
       }
     };
+
+    // ... rest of the auth listener code ...
 
     // Initial Session Check
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -151,7 +156,7 @@ export default function App() {
       supabase.from("Customers").select("*").order("name"),
       supabase.from("Jobs").select("*, Customers(*), LineItems(*)").order("job_number", { ascending: false }),
       supabase.from("Tasks").select("*").order("created_at", { ascending: false }),
-      supabase.from("home_tasks").select("*").order("created_at", { ascending: false })
+      supabase.from("Home Tasks").select("*").order("created_at", { ascending: false })
     ]);
     
     setData({ 
@@ -292,16 +297,29 @@ export default function App() {
         {tab === "home_tasks" && (
           <div className="space-y-2 md:space-y-3 animate-slide-up max-w-2xl mx-auto">
             <h3 className="text-2xl font-black text-center mb-4 text-green-500 uppercase">Home Tasks</h3>
+            
             {data.home_tasks?.map(t => (
               <div key={t.id} className={`glass p-4 md:p-6 rounded-2xl md:rounded-[2rem] flex items-center justify-between transition-all ${t.is_complete ? 'opacity-30 grayscale' : ''}`}>
-                <div className="flex items-center gap-3 md:gap-5 cursor-pointer flex-1" onClick={async () => { haptic(15); await supabase.from("home_tasks").update({ is_complete: !t.is_complete }).eq("id", t.id); fetchAll(); }}>
+                <div className="flex items-center gap-3 md:gap-5 cursor-pointer flex-1" onClick={async () => { haptic(15); await supabase.from("Home Tasks").update({ is_complete: !t.is_complete }).eq("id", t.id); fetchAll(); }}>
                   {t.is_complete ? <CheckCircle2 className="text-green-500 shrink-0" size={24} /> : <Circle className="text-zinc-700 shrink-0" size={24}/>}
                   <span className={`text-base md:text-lg ${t.is_complete ? 'line-through' : 'font-bold'}`}>{t.task_name}</span>
                 </div>
-                <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from("home_tasks").delete().eq("id", t.id); fetchAll(); }}} className="p-2 md:p-3 text-zinc-600 hover:text-red-500 ml-2"><Trash2 size={18} className="md:w-5 md:h-5"/></button>
+                <button onClick={async () => { if(window.confirm("Delete?")){ await supabase.from("Home Tasks").delete().eq("id", t.id); fetchAll(); }}} className="p-2 md:p-3 text-zinc-600 hover:text-red-500 ml-2"><Trash2 size={18} className="md:w-5 md:h-5"/></button>
               </div>
             ))}
              {(!data.home_tasks || data.home_tasks.length === 0) && <div className="text-center text-zinc-500 mt-10">No home tasks active.</div>}
+
+             {/* Logout Button for Restricted User */}
+             {isRestrictedUser && (
+               <div className="pt-8 pb-12">
+                 <button 
+                   onClick={() => { if(window.confirm("Log out?")) supabase.auth.signOut(); }} 
+                   className="w-full p-4 bg-red-500/10 text-red-500 border border-red-500/20 rounded-2xl font-black uppercase tracking-widest hover:bg-red-500/20 transition-all"
+                 >
+                   Logout
+                 </button>
+               </div>
+             )}
           </div>
         )}
 
@@ -333,9 +351,14 @@ export default function App() {
       </nav>
 
       {/* Modal & Logic */}
+      {/* Modal & Logic */}
       {(showAddModal || editingItem) && (
         <Modal 
-          type={editingItem ? editingItem.type : (tab === 'dashboard' || tab === 'settings' ? 'Jobs' : tab.charAt(0).toUpperCase() + tab.slice(1))} 
+          type={
+            editingItem ? editingItem.type : 
+            (tab === 'dashboard' || tab === 'settings') ? 'Jobs' : 
+            (tab === 'home_tasks' ? 'Home Tasks' : tab.charAt(0).toUpperCase() + tab.slice(1)) // <--- CRITICAL: MUST BE 'Home Tasks'
+          } 
           item={editingItem?.item} customers={data.customers}
           onClose={() => { setShowAddModal(false); setEditingItem(null); }}
           onSuccess={() => { setShowAddModal(false); setEditingItem(null); fetchAll(); haptic([10, 50]); }}
@@ -407,18 +430,21 @@ function JobCard({ job, onToggleFlag, onArchive, onEdit }) {
 
 function Modal({ type, item, customers, onClose, onSuccess }) {
   const isEdit = !!item;
+  
+  // 1. SCHEMA: Must match the database table name exactly (with quotes)
   const tableSchemas = {
     Jobs: ['title', 'status', 'customer_id', 'revenue', 'costs', 'notes', 'quote_sent', 'work_order_sent', 'invoice_sent', 'report_sent', 'is_archived'],
     Customers: ['name', 'phone', 'email', 'address'],
     Tasks: ['task_text', 'is_completed'],
-    HomeTasks: ['task_name', 'is_complete']
+    'Home Tasks': ['task_name', 'is_complete'] // <--- QUOTED KEY WITH SPACE
   };
 
+  // 2. STATE: Initialize 'task_name' as empty string '' (NOT undefined)
   const [form, setForm] = useState(item || { 
     title: '', status: 'Quote', revenue: 0, costs: 0, notes: '', 
     name: '', phone: '', email: '', address: '', task_text: '',
     quote_sent: false, work_order_sent: false, invoice_sent: false, report_sent: false, customer_id: '',
-    task_name: '', is_complete: false // Defaults for HomeTasks
+    task_name: '', is_complete: false // <--- IMPORTANT DEFAULT VALUE
   });
 
   const addLineItem = () => {
@@ -436,9 +462,19 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const table = type === 'Clients' ? 'Customers' : type;
+    
+    // 3. TABLE NAME RESOLUTION
+    let table = type;
+    if (type === 'Clients') table = 'Customers';
+    // Note: If type is 'Home Tasks', table stays 'Home Tasks', which is correct.
+
     const allowed = tableSchemas[table] || [];
-    const cleanData = Object.keys(form).filter(k => allowed.includes(k)).reduce((o, k) => { o[k] = form[k]; return o; }, {});
+    
+    // Filter form data to only allow columns that exist in the DB
+    const cleanData = allowed.reduce((obj, key) => { 
+      obj[key] = form[key]; 
+      return obj; 
+    }, {});
     
     if (type === 'Jobs') {
       const { data: jobData, error: jobError } = isEdit 
@@ -464,7 +500,11 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
       }
       onSuccess();
     } else {
-      const { error } = isEdit ? await supabase.from(table).update(cleanData).eq('id', item.id) : await supabase.from(table).insert([cleanData]);
+      // 4. SEND TO SUPABASE (Using the variable 'table' which holds "Home Tasks")
+      const { error } = isEdit 
+        ? await supabase.from(table).update(cleanData).eq('id', item.id) 
+        : await supabase.from(table).insert([cleanData]);
+        
       if (!error) onSuccess(); else alert(error.message);
     }
   };
@@ -479,11 +519,14 @@ function Modal({ type, item, customers, onClose, onSuccess }) {
         
         <form onSubmit={handleSubmit} className="space-y-3 md:space-y-4">
           
-          {type === 'HomeTasks' && (
-            <input required className="w-full bg-white/5 border border-white/10 p-4 md:p-5 rounded-xl md:rounded-2xl text-sm md:text-base font-bold outline-none focus:border-green-500/50" 
-            placeholder="Home Task Name" 
-            value={form.task_name} 
-            onChange={e => setForm({...form, task_name: e.target.value})} 
+          {/* 5. UI: CHECK FOR 'Home Tasks' WITH SPACE TO SHOW INPUT */}
+          {type === 'Home Tasks' && (
+            <input 
+              required 
+              className="w-full bg-white/5 border border-white/10 p-4 md:p-5 rounded-xl md:rounded-2xl text-sm md:text-base font-bold outline-none focus:border-green-500/50" 
+              placeholder="Home Task Name" 
+              value={form.task_name} 
+              onChange={e => setForm({...form, task_name: e.target.value})} 
             />
           )}
 
